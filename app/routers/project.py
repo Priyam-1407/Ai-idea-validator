@@ -5,6 +5,9 @@ from app.models.project import Project
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectOut
 from app.auth.dependencies import get_current_user
+from app.models.report import Report
+from app.schemas.report import ReportOut
+from app.services.llm_service import analyze_startup_idea
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -68,3 +71,61 @@ def delete_project(
     db.delete(project)
     db.commit()
     return {"message": "Project deleted successfully"}
+@router.post("/{project_id}/analyze", response_model=ReportOut)
+def analyze_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = analyze_startup_idea(
+        title=project.title,
+        description=project.description,
+        industry=project.industry
+    )
+
+    new_report = Report(
+        project_id=project.id,
+        summary=result.get("summary"),
+        competitors=result.get("competitors"),
+        features=result.get("features"),
+        revenue_model=result.get("revenue_model"),
+        risks=result.get("risks"),
+        roadmap=result.get("roadmap"),
+        success_score=result.get("success_score")
+    )
+
+    db.add(new_report)
+    db.commit()
+    db.refresh(new_report)
+
+    return new_report
+
+
+@router.get("/{project_id}/report", response_model=ReportOut)
+def get_report(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    report = db.query(Report).filter(Report.project_id == project_id).first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found. Run /analyze first.")
+
+    return report
