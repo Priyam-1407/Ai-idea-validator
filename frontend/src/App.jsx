@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = " https://ai-idea-validator-1-z2b9.onrender.com";
 
 function App() {
   const [token, setToken] = useState(null);
