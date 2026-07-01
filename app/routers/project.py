@@ -8,6 +8,7 @@ from app.auth.dependencies import get_current_user
 from app.models.report import Report
 from app.schemas.report import ReportOut
 from app.services.llm_service import analyze_startup_idea
+from app.services.ml_service import predict_success_score
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -72,6 +73,7 @@ def delete_project(
     db.commit()
     return {"message": "Project deleted successfully"}
 @router.post("/{project_id}/analyze", response_model=ReportOut)
+@router.post("/{project_id}/analyze", response_model=ReportOut)
 def analyze_project(
     project_id: int,
     db: Session = Depends(get_db),
@@ -91,6 +93,14 @@ def analyze_project(
         industry=project.industry
     )
 
+    ml_score = predict_success_score(
+        industry=project.industry or "AI",
+        description_length=len(project.description),
+        competitor_count=len(result.get("competitors", [])),
+        feature_count=len(result.get("features", [])),
+        risk_count=len(result.get("risks", []))
+    )
+
     new_report = Report(
         project_id=project.id,
         summary=result.get("summary"),
@@ -99,7 +109,7 @@ def analyze_project(
         revenue_model=result.get("revenue_model"),
         risks=result.get("risks"),
         roadmap=result.get("roadmap"),
-        success_score=result.get("success_score")
+        success_score=ml_score
     )
 
     db.add(new_report)
@@ -107,7 +117,6 @@ def analyze_project(
     db.refresh(new_report)
 
     return new_report
-
 
 @router.get("/{project_id}/report", response_model=ReportOut)
 def get_report(
